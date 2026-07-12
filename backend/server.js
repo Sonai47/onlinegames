@@ -255,18 +255,18 @@ io.on('connection', (socket) => {
         winner: null
       };
     } else if (room.gameType === 'word') {
-      // Word guessing requires role setup first.
-      // We assign Giver and Guesser roles. Giver starts by writing the word.
-      const giverId = firstTurn;
-      const guesserId = room.players.find(p => p.id !== giverId).id;
+      const categories = ["Animal", "Country", "Fruit/Vegetable", "Job/Profession", "Tech/Gadget", "Movie/TV Show", "Food/Dish"];
+      const chosenCategory = categories[Math.floor(Math.random() * categories.length)];
+      
       room.gameState = {
-        giverId,
-        guesserId,
-        word: '',
-        hint: '',
-        guessedLetters: [],
-        wrongGuesses: 0,
-        status: 'waiting_for_word' // waiting_for_word, playing, won, lost
+        category: chosenCategory,
+        status: 'setup', // setup, playing, won
+        playersData: {
+          [p1.id]: { name: p1.name, word: '', guesses: [] },
+          [p2.id]: { name: p2.name, word: '', guesses: [] }
+        },
+        currentTurn: firstTurn,
+        winner: null
       };
     }
 
@@ -376,19 +376,32 @@ io.on('connection', (socket) => {
   });
 
   // --- WORD GUESSING EVENT HANDLERS ---
-  socket.on('word_setup', ({ roomCode, word, hint }) => {
+  socket.on('word_setup', ({ roomCode, word }) => {
     const room = rooms[roomCode];
     if (!room || room.gameType !== 'word' || !room.gameState) return;
 
     const state = room.gameState;
-    if (state.status !== 'waiting_for_word') return;
-    if (state.giverId !== socket.id) return;
+    if (state.status !== 'setup') return;
 
-    state.word = word.trim().toUpperCase();
-    state.hint = hint.trim();
-    state.guessedLetters = [];
-    state.wrongGuesses = 0;
-    state.status = 'playing';
+    state.playersData[socket.id].word = word.trim().toUpperCase();
+
+    // Check if both words are set
+    const pIds = Object.keys(state.playersData);
+    const bothWordsSet = pIds.every(id => state.playersData[id].word !== '');
+
+    if (bothWordsSet) {
+      state.status = 'playing';
+
+      // Send system message to chat
+      const systemMsg = {
+        id: Math.random().toString(),
+        sender: 'System',
+        text: `Both players have set their secret words! The category is: ${state.category}. Let the duel begin!`,
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      };
+      room.messages.push(systemMsg);
+      io.to(roomCode).emit('chat_message', systemMsg);
+    }
 
     io.to(roomCode).emit('game_state_updated', {
       gameState: state,
@@ -396,36 +409,51 @@ io.on('connection', (socket) => {
     });
   });
 
-  socket.on('word_guess', ({ roomCode, letter }) => {
+  socket.on('word_guess', ({ roomCode, guess }) => {
     const room = rooms[roomCode];
     if (!room || room.gameType !== 'word' || !room.gameState) return;
 
     const state = room.gameState;
     if (state.status !== 'playing') return;
-    if (state.guesserId !== socket.id) return;
+    if (state.currentTurn !== socket.id) return;
 
-    const normalizedLetter = letter.toUpperCase();
-    if (state.guessedLetters.includes(normalizedLetter)) return;
+    const activePlayer = room.players.find(p => p.id === socket.id);
+    const opponent = room.players.find(p => p.id !== socket.id);
+    const opponentWord = state.playersData[opponent.id].word;
 
-    state.guessedLetters.push(normalizedLetter);
+    const cleanGuess = guess.trim().toUpperCase();
 
-    // Check if letter is in word
-    if (!state.word.includes(normalizedLetter)) {
-      state.wrongGuesses += 1;
-    }
-
-    // Check Win/Lose condition
-    const wordUniqueLetters = [...new Set(state.word.replace(/\s/g, ''))];
-    const hasWon = wordUniqueLetters.every(char => state.guessedLetters.includes(char));
-
-    if (hasWon) {
+    if (cleanGuess === opponentWord) {
+      // Current player wins!
       state.status = 'won';
-      const guesser = room.players.find(p => p.id === state.guesserId);
-      guesser.score += 1;
-    } else if (state.wrongGuesses >= 6) {
-      state.status = 'lost';
-      const giver = room.players.find(p => p.id === state.giverId);
-      giver.score += 1;
+      state.winner = socket.id;
+      activePlayer.score += 1;
+
+      // Broadcast victory
+      const systemMsg = {
+        id: Math.random().toString(),
+        sender: 'System',
+        text: `🎉 ${activePlayer.name} guessed correctly! The secret word was "${opponentWord}". ${activePlayer.name} wins the match!`,
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      };
+      room.messages.push(systemMsg);
+      io.to(roomCode).emit('chat_message', systemMsg);
+    } else {
+      // Incorrect guess
+      state.playersData[socket.id].guesses.push(cleanGuess);
+
+      // Broadcast incorrect guess
+      const systemMsg = {
+        id: Math.random().toString(),
+        sender: 'System',
+        text: `❌ ${activePlayer.name} guessed "${cleanGuess}" - Incorrect!`,
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      };
+      room.messages.push(systemMsg);
+      io.to(roomCode).emit('chat_message', systemMsg);
+
+      // Switch turn
+      state.currentTurn = opponent.id;
     }
 
     io.to(roomCode).emit('game_state_updated', {
@@ -436,28 +464,10 @@ io.on('connection', (socket) => {
 
   socket.on('word_reset', ({ roomCode }) => {
     const room = rooms[roomCode];
-    if (!room || room.gameType !== 'word' || !room.gameState) return;
-
-    const state = room.gameState;
-    // Swap roles for the next round
-    const previousGiver = state.giverId;
-    const previousGuesser = state.guesserId;
-
+    if (!room || room.gameType !== 'word') return;
     room.players.forEach(p => p.ready = false);
-    room.gameState = {
-      giverId: previousGuesser, // guesser becomes giver
-      guesserId: previousGiver, // giver becomes guesser
-      word: '',
-      hint: '',
-      guessedLetters: [],
-      wrongGuesses: 0,
-      status: 'waiting_for_word'
-    };
-
-    io.to(roomCode).emit('game_started', {
-      gameType: 'word',
-      gameState: room.gameState
-    });
+    room.gameState = null;
+    io.to(roomCode).emit('game_reset', room.players);
   });
 
   // 7. Disconnection Handler

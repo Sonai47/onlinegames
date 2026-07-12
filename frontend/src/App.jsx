@@ -192,12 +192,12 @@ export default function App() {
   };
 
   // Word guessing emitters
-  const handleWordSetup = (word, hint) => {
-    socket.emit('word_setup', { roomCode, word, hint });
+  const handleWordSetup = (word) => {
+    socket.emit('word_setup', { roomCode, word });
   };
 
-  const handleWordGuessLetter = (letter) => {
-    socket.emit('word_guess', { roomCode, letter });
+  const handleWordGuess = (guess) => {
+    socket.emit('word_guess', { roomCode, guess });
   };
 
   const handleWordReset = () => {
@@ -287,8 +287,10 @@ export default function App() {
                 players={players}
                 currentPlayer={currentPlayer}
                 onSetupWord={handleWordSetup}
-                onGuessLetter={handleWordGuessLetter}
+                onGuess={handleWordGuess}
                 onResetGame={handleWordReset}
+                messages={messages}
+                onSendMessage={handleSendMessage}
               />
             )}
           </>
