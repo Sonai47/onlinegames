@@ -462,6 +462,33 @@ io.on('connection', (socket) => {
     });
   });
 
+  socket.on('word_pass_turn', ({ roomCode }) => {
+    const room = rooms[roomCode];
+    if (!room || room.gameType !== 'word' || !room.gameState) return;
+
+    const state = room.gameState;
+    if (state.status !== 'playing') return;
+    if (state.currentTurn !== socket.id) return;
+
+    const activePlayer = room.players.find(p => p.id === socket.id);
+    const opponent = room.players.find(p => p.id !== socket.id);
+    state.currentTurn = opponent.id;
+
+    const systemMsg = {
+      id: Math.random().toString(),
+      sender: 'System',
+      text: `🔄 ${activePlayer.name} passed the turn to ${opponent.name}.`,
+      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    };
+    room.messages.push(systemMsg);
+    io.to(roomCode).emit('chat_message', systemMsg);
+
+    io.to(roomCode).emit('game_state_updated', {
+      gameState: state,
+      players: room.players
+    });
+  });
+
   socket.on('word_reset', ({ roomCode }) => {
     const room = rooms[roomCode];
     if (!room || room.gameType !== 'word') return;
