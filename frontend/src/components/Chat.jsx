@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Send } from 'lucide-react';
 
-export default function Chat({ messages, onSendMessage, playerName }) {
+export default function Chat({ messages, onSendMessage, playerName, title = 'LOBBY CHAT', placeholder = 'Type a message...' }) {
   const [inputText, setInputText] = useState('');
   const messagesEndRef = useRef(null);
 
@@ -20,7 +20,7 @@ export default function Chat({ messages, onSendMessage, playerName }) {
   return (
     <div className="glass-panel chat-container">
       <h3 style={{ marginBottom: '1rem', borderBottom: '1px solid var(--border-glass)', paddingBottom: '0.5rem', color: 'var(--color-primary)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-        <span>LOBBY CHAT</span>
+        <span>{title}</span>
       </h3>
 
       <div className="chat-messages">
@@ -57,7 +57,7 @@ export default function Chat({ messages, onSendMessage, playerName }) {
         <input
           type="text"
           className="glass-input"
-          placeholder="Type a message..."
+          placeholder={placeholder}
           value={inputText}
           onChange={(e) => setInputText(e.target.value)}
           maxLength={100}

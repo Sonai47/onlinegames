@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { AlignLeft, ArrowLeft, RotateCcw, HelpCircle, Trophy, Play, Frown } from 'lucide-react';
 import Chat from './Chat';
 
@@ -8,6 +8,7 @@ export default function WordGuessing({
   currentPlayer, 
   onSetupWord, 
   onGuess, 
+  onPassTurn,
   onResetGame,
   messages,
   onSendMessage
@@ -16,6 +17,31 @@ export default function WordGuessing({
   const [wordInput, setWordInput] = useState('');
   const [guessInput, setGuessInput] = useState('');
   const [error, setError] = useState('');
+  const [alphabetStatus, setAlphabetStatus] = useState({});
+
+  useEffect(() => {
+    if (status === 'setup') {
+      setAlphabetStatus({});
+    }
+  }, [status]);
+
+  const handleLetterClick = (letter) => {
+    setAlphabetStatus(prev => {
+      const current = prev[letter];
+      let next;
+      if (!current) {
+        next = 'yes';
+      } else if (current === 'yes') {
+        next = 'no';
+      } else {
+        next = undefined;
+      }
+      return {
+        ...prev,
+        [letter]: next
+      };
+    });
+  };
 
   if (!currentPlayer || !currentPlayer.id || !playersData || !playersData[currentPlayer.id]) {
     return (
@@ -115,8 +141,7 @@ export default function WordGuessing({
                   <label style={{ display: 'block', marginBottom: '0.35rem', fontSize: '0.85rem', fontWeight: 600, color: 'var(--color-text-muted)' }}>
                     SECRET WORD
                   </label>
-                  <input 
-                    type="password" 
+                  <input  
                     className="glass-input" 
                     placeholder="Enter word..." 
                     value={wordInput} 
@@ -179,8 +204,66 @@ export default function WordGuessing({
             <div className="status-bar">
               <div className={`turn-indicator ${isMyTurn ? 'active' : ''}`}>
                 {isMyTurn 
-                  ? "Your Turn: Make an official guess or chat to ask questions!" 
-                  : `Waiting for ${opponentPlayer?.name || 'opponent'}'s guess...`}
+                  ? "Your Turn: Ask questions in chat or make a guess! Click 'Pass Turn' when done." 
+                  : `Waiting for ${opponentPlayer?.name || 'opponent'}'s turn...`}
+              </div>
+            </div>
+
+            {/* Alphabet Tracker Box */}
+            <div className="glass-panel" style={{ background: 'rgba(0,0,0,0.15)', padding: '1.25rem 1.5rem' }}>
+              <h3 style={{ fontSize: '1.1rem', color: '#fff', marginBottom: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <AlignLeft size={18} style={{ color: 'var(--color-success)' }} />
+                Alphabet Tracker (Your Notes)
+              </h3>
+              <p style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)', marginBottom: '1rem' }}>
+                Click letters to mark them: <span style={{ color: 'var(--color-success)', fontWeight: 600 }}>✔ (In Word)</span>, <span style={{ color: 'var(--color-warning)', fontWeight: 600 }}>✖ (Not In Word)</span>, or neutral.
+              </p>
+              <div style={{ 
+                display: 'grid', 
+                gridTemplateColumns: 'repeat(auto-fill, minmax(42px, 1fr))', 
+                gap: '0.5rem' 
+              }}>
+                {'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('').map(letter => {
+                  const status = alphabetStatus[letter];
+                  return (
+                    <button
+                      key={letter}
+                      onClick={() => handleLetterClick(letter)}
+                      style={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        aspectRatio: '1',
+                        borderRadius: '10px',
+                        border: status === 'yes' 
+                          ? '1px solid var(--color-success)' 
+                          : status === 'no' 
+                          ? '1px solid var(--color-warning)' 
+                          : '1px solid var(--border-glass)',
+                        background: status === 'yes'
+                          ? 'rgba(16, 185, 129, 0.15)'
+                          : status === 'no'
+                          ? 'rgba(239, 68, 68, 0.15)'
+                          : 'rgba(255, 255, 255, 0.03)',
+                        color: status === 'yes'
+                          ? 'var(--color-success)'
+                          : status === 'no'
+                          ? 'var(--color-warning)'
+                          : '#fff',
+                        cursor: 'pointer',
+                        fontWeight: '700',
+                        fontSize: '1.1rem',
+                        position: 'relative',
+                        transition: 'all 0.15s ease',
+                      }}
+                    >
+                      <span>{letter}</span>
+                      {status === 'yes' && <span style={{ fontSize: '0.65rem', fontWeight: 'bold', marginTop: '2px' }}>✔</span>}
+                      {status === 'no' && <span style={{ fontSize: '0.65rem', fontWeight: 'bold', marginTop: '2px' }}>✖</span>}
+                    </button>
+                  );
+                })}
               </div>
             </div>
 
@@ -209,8 +292,16 @@ export default function WordGuessing({
                       maxLength={12}
                       style={{ textTransform: 'uppercase', letterSpacing: '0.1em' }}
                     />
-                    <button type="submit" className="glass-button btn-secondary">
+                    <button type="submit" className="glass-button btn-secondary" style={{ flexShrink: 0 }}>
                       GUESS
+                    </button>
+                    <button 
+                      type="button" 
+                      onClick={onPassTurn} 
+                      className="glass-button btn-primary"
+                      style={{ background: 'rgba(168, 85, 247, 0.4)', flexShrink: 0 }}
+                    >
+                      PASS TURN
                     </button>
                   </div>
                   <p style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)', margin: 0 }}>
@@ -220,7 +311,7 @@ export default function WordGuessing({
               ) : (
                 <div style={{ textAlign: 'center', padding: '1.5rem 1rem' }}>
                   <p style={{ color: 'var(--color-text-muted)', fontSize: '1rem', fontStyle: 'italic' }}>
-                    Opponent's turn to guess. You can talk and answer questions in the chat!
+                    Opponent's turn to guess/ask. You can talk and answer questions in the chat!
                   </p>
                 </div>
               )}
@@ -275,6 +366,8 @@ export default function WordGuessing({
               messages={messages} 
               onSendMessage={onSendMessage} 
               playerName={currentPlayer.name} 
+              title="GAME CHAT"
+              placeholder={isMyTurn ? "Ask a question..." : "Answer the question..."}
             />
           </div>
 

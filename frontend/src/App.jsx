@@ -200,6 +200,10 @@ export default function App() {
     socket.emit('word_guess', { roomCode, guess });
   };
 
+  const handleWordPassTurn = () => {
+    socket.emit('word_pass_turn', { roomCode });
+  };
+
   const handleWordReset = () => {
     socket.emit('word_reset', { roomCode });
   };
@@ -288,6 +292,7 @@ export default function App() {
                 currentPlayer={currentPlayer}
                 onSetupWord={handleWordSetup}
                 onGuess={handleWordGuess}
+                onPassTurn={handleWordPassTurn}
                 onResetGame={handleWordReset}
                 messages={messages}
                 onSendMessage={handleSendMessage}
